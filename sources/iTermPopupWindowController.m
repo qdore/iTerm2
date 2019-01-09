@@ -245,7 +245,7 @@
     PTYTextView* tv = [self.delegate popupVT100TextView];
     [tv scrollEnd];
     NSRect frame = [[self window] frame];
-    frame.size.height = [[tableView_ headerView] frame].size.height + MIN(20, [model_ count]) * ([tableView_ rowHeight] + [tableView_ intercellSpacing].height);
+    frame.size.height = [[tableView_ headerView] frame].size.height + MIN(100, [model_ count]) * ([tableView_ rowHeight] + [tableView_ intercellSpacing].height);
 
     NSPoint p = NSMakePoint([iTermAdvancedSettingsModel terminalMargin] + cx * [tv charWidth],
                             ([screen numberOfLines] - [screen height] + cy) * [tv lineHeight]);
@@ -299,15 +299,21 @@
     onTop_ = onTop;
 }
 
+- (void)insertTab:(id)sender {
+    [self moveDown:sender];
+}
+
 - (void)moveDown:(id)sender {
     if ([self passKeyEventToDelegateForSelector:_cmd string:nil]) {
         return;
     }
     NSInteger row = tableView_.selectedRow;
-    if (row == -1) {
+    if (row == -1 || row > tableView_.numberOfRows) {
+        [tableView_ selectRowIndexes:[NSIndexSet indexSetWithIndex:0] byExtendingSelection:NO];
         return;
     }
     if (row + 1 == tableView_.numberOfRows) {
+        [tableView_ selectRowIndexes:[NSIndexSet indexSetWithIndex:0] byExtendingSelection:NO];
         return;
     }
     [tableView_ selectRowIndexes:[NSIndexSet indexSetWithIndex:row + 1] byExtendingSelection:NO];
@@ -446,37 +452,32 @@
     NSString* value = [truncatedMainValue stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
 
     NSString* temp = value;
-    for (int i = 0; i < [substring_ length]; ++i) {
-        unichar wantChar = [substring_ characterAtIndex:i];
-        NSRange r = [temp rangeOfString:[NSString stringWithCharacters:&wantChar
-                                                                length:1]
+    if ([substring_ length] != 0) {
+        NSRange r = [temp rangeOfString:substring_
                                 options:NSCaseInsensitiveSearch];
-        if (r.location == NSNotFound) {
-            continue;
-        }
-        NSRange prefix;
-        prefix.location = 0;
-        prefix.length = r.location;
+        if (r.location != NSNotFound) {
+            NSRange prefix;
+            prefix.location = 0;
+            prefix.length = r.location;
 
-        NSAttributedString* attributedSubstr;
-        if (prefix.length > 0) {
-            NSString* substr = [temp substringWithRange:prefix];
+            NSAttributedString* attributedSubstr;
+            if (prefix.length > 0) {
+                NSString* substr = [temp substringWithRange:prefix];
+                attributedSubstr =
+                    [[[NSAttributedString alloc] initWithString:substr
+                                                     attributes:plainAttributes] autorelease];
+                [as appendAttributedString:attributedSubstr];
+            }
+
+            //unichar matchChar = [temp characterAtIndex:r.location];
             attributedSubstr =
-                [[[NSAttributedString alloc] initWithString:substr
-                                                 attributes:plainAttributes] autorelease];
+                [[[NSAttributedString alloc] initWithString:substring_
+                                                 attributes:boldAttributes] autorelease];
             [as appendAttributedString:attributedSubstr];
+            r.length = [temp length] - r.location - [substring_ length];
+            r.location += [substring_ length];
+            temp = [temp substringWithRange:r];
         }
-
-        unichar matchChar = [temp characterAtIndex:r.location];
-        attributedSubstr =
-            [[[NSAttributedString alloc] initWithString:[NSString stringWithCharacters:&matchChar
-                                                                                length:1]
-                                             attributes:boldAttributes] autorelease];
-        [as appendAttributedString:attributedSubstr];
-
-        r.length = [temp length] - r.location - 1;
-        ++r.location;
-        temp = [temp substringWithRange:r];
     }
 
     if ([temp length] > 0) {
@@ -497,15 +498,13 @@
 
 - (BOOL)_word:(NSString*)temp matchesFilter:(NSString*)filter
 {
-    for (int i = 0; i < [filter length]; ++i) {
-        unichar wantChar = [filter characterAtIndex:i];
-        NSRange r = [temp rangeOfString:[NSString stringWithCharacters:&wantChar length:1] options:NSCaseInsensitiveSearch];
-        if (r.location == NSNotFound) {
-            return NO;
-        }
-        r.length = [temp length] - r.location - 1;
-        ++r.location;
-        temp = [temp substringWithRange:r];
+    if (filter.length == 0) {
+        return YES;
+    }
+
+    NSRange r = [temp rangeOfString:filter options:NSCaseInsensitiveSearch];
+    if (r.location == NSNotFound) {
+        return NO;
     }
     return YES;
 }

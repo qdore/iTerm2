@@ -16,6 +16,7 @@
 - (void)rowSelected:(id)sender;
 - (void)more;
 - (void)less;
+- (void)delayMethod:(NSTimer*)theTimer;
 
 // Add a bunch of iTermCommandHistoryEntryMO*s. 'context' gives the prefix that
 // generated the entries.

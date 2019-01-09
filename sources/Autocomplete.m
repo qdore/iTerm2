@@ -63,6 +63,8 @@ const int kMaxResultContextWords = 4;
 
     // Character set for word separators
     NSCharacterSet *wordSeparatorCharacterSet_;
+
+    NSMutableDictionary *autoConfig_;
 }
 
 + (int)maxOptions
@@ -84,6 +86,32 @@ const int kMaxResultContextWords = 4;
     stack_ = [[NSMutableArray alloc] init];
     findResults_ = [[NSMutableArray alloc] init];
     findContext_ = [[FindContext alloc] init];
+
+    autoConfig_ = [[NSMutableDictionary alloc] init];
+
+    NSData* data = [NSData dataWithContentsOfFile:@"/Users/adore/.autocomplete"];
+    __autoreleasing NSError* error = nil;
+    NSDictionary* autoComplete = [NSJSONSerialization JSONObjectWithData:data
+                                                options:kNilOptions error:&error];
+
+    NSEnumerator *enumerator = [autoComplete keyEnumerator];
+    id prefix;
+    // extra parens to suppress warning about using = instead of ==
+    while((prefix = [enumerator nextObject])) {
+        id title;
+        NSDictionary* title_commands = [autoComplete objectForKey:prefix];
+        NSEnumerator *commands_enumerator = [title_commands keyEnumerator];
+
+        while((title = [commands_enumerator nextObject])) {
+            [autoConfig_ setObject:[title_commands objectForKey:title] forKey:[NSString stringWithFormat:@"%@ %@", prefix, title]];
+        }
+    }
+
+    // Be careful here. You add this as a category to NSDictionary
+    // but you get an id back, which means that result
+    // might be an NSArray as well!
+    if (error != nil) return nil;
+
     return self;
 }
 
@@ -288,6 +316,7 @@ const int kMaxResultContextWords = 4;
 
 - (void)_processPasteboardEntry:(PasteboardEntry*)entry
 {
+    return;
     NSString* value = [entry mainValue];
     NSRange range = [value rangeOfString:prefix_ options:(NSCaseInsensitiveSearch)];
     if (range.location != NSNotFound) {
@@ -362,7 +391,17 @@ const int kMaxResultContextWords = 4;
         [populateTimer_ invalidate];
         populateTimer_ = nil;
     }
-    [super onClose];
+    //[super onClose];
+}
+
+- (void)delayMethod:(NSTimer*)theTimer
+{
+    if ([theTimer userInfo] == nil) {
+        [super onClose];
+    } else {
+        [[self delegate] popupInsertText:(NSString*)[theTimer userInfo]];
+        [[self delegate] popupInsertText:@"\n"];
+    }
 }
 
 - (void)rowSelected:(id)sender
@@ -375,7 +414,19 @@ const int kMaxResultContextWords = 4;
             [moreText_ release];
             moreText_ = nil;
         }
-        [[self delegate] popupInsertText:[e mainValue]];
+        [[self delegate] popupInsertText:@"\b\b\b\b\b\b\b\b\b\b"];
+        NSString* key = [NSString stringWithFormat:@"%@%@", prefix_, [e mainValue]];
+        id value = [autoConfig_ objectForKey:key];
+
+
+        float delay_time = 0.0f;
+        float delay_time_interval = 0.5f;
+        for (NSString *command in value) {
+            [NSTimer scheduledTimerWithTimeInterval:delay_time target:self selector:@selector(delayMethod:) userInfo:command repeats:NO];
+            delay_time = delay_time + delay_time_interval;
+
+        }
+        [NSTimer scheduledTimerWithTimeInterval:delay_time target:self selector:@selector(delayMethod:) userInfo:nil repeats:NO];
         [super rowSelected:sender];
     }
 }
@@ -465,6 +516,25 @@ const int kMaxResultContextWords = 4;
 
 - (void)_doPopulateMore
 {
+    id key;
+    NSEnumerator *enumerator = [autoConfig_ keyEnumerator];
+
+    while((key = [enumerator nextObject])) {
+        NSRange range = [key rangeOfString:prefix_];
+        if (range.location != NSNotFound && (unsigned long)range.location == 0) {
+            NSMutableArray* resultContext = [NSMutableArray arrayWithCapacity:kMaxResultContextWords];
+            NSString* word = [key substringWithRange:NSMakeRange(3, [key length] - 3)];
+            PopupEntry* e = [PopupEntry entryWithString:word score:[self scoreResultNumber:matchCount_++
+                                                                                       queryContext:context_
+                                                                                      resultContext:resultContext
+                                                                                joiningPrefixLength:0
+                                                                                               word:word]];
+            [e setPrefix:prefix_];
+            [[self unfilteredModel] addHit:e];
+        }
+    }
+    /*
+
     VT100Screen* screen = [[self delegate] popupVT100Screen];
 
     struct timeval begintime;
@@ -670,6 +740,7 @@ const int kMaxResultContextWords = 4;
         }
     } while (more_ || [findResults_ count] > 0);
     AcLog(@"While loop exited. Nothing more to do.");
+    */
     [self reloadData:YES];
     if (!populateTimer_) {
         if (self.unfilteredModel.count == 0) {

@@ -315,6 +315,7 @@ extern NSString *const iTermBroadcastDomainsDidChangeNotification;
 // Turn full-screen mode on or off. Creates a new PseudoTerminal and moves this
 // one's state into it.
 - (IBAction)closeCurrentTab:(id)sender;
+- (IBAction)openAutocomplete:(id)sender;
 
 - (void)changeTabColorToMenuAction:(id)sender;
 - (void)moveSessionToWindow:(id)sender;

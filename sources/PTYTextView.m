@@ -167,6 +167,7 @@ static const int kDragThreshold = 3;
     BOOL _mouseDownOnImage;
     iTermImageInfo *_imageBeingClickedOn;
     NSEvent *_mouseDownEvent;
+    NSMutableString *_lastThreeChar;
 
     // blinking cursor
     NSTimeInterval _timeOfLastBlink;
@@ -346,6 +347,8 @@ static const int kDragThreshold = 3;
 
         _accessibilityHelper = [[iTermTextViewAccessibilityHelper alloc] init];
         _accessibilityHelper.delegate = self;
+
+        _lastThreeChar = [[NSMutableString alloc] initWithString:@"    "];
 
         _badgeLabel = [[iTermBadgeLabel alloc] init];
         _keyBindingEmulator = [[iTermNSKeyBindingEmulator alloc] init];
@@ -1360,6 +1363,26 @@ static const int kDragThreshold = 3;
 // * "special" keys, like Enter which go through doCommandBySelector
 // * Repeated special keys
 - (void)keyDown:(NSEvent *)event {
+
+    if ([event keyCode] == 51) {
+        if (_lastThreeChar.length > 1) {
+            [_lastThreeChar deleteCharactersInRange:NSMakeRange(_lastThreeChar.length - 1, 1)];
+        }
+    }
+    else if ([event keyCode] == 48) {
+        if ([_lastThreeChar isEqualToString:@"ssh"] ||
+            [_lastThreeChar isEqualToString:@"run"]) {
+            PseudoTerminal *term = [[iTermController sharedInstance] currentTerminal];
+            [term openAutocomplete:nil];
+            return;
+        }
+    } else {
+        [_lastThreeChar insertString:[event characters] atIndex:_lastThreeChar.length];
+        if (_lastThreeChar.length > 3) {
+            [_lastThreeChar deleteCharactersInRange:NSMakeRange(0, _lastThreeChar.length - 3)];
+        }
+    }
+
     [_altScreenMouseScrollInferrer keyDown:event];
     if (![_delegate textViewShouldAcceptKeyDownEvent:event]) {
         return;
